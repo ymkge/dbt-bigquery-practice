@@ -38,75 +38,112 @@ gcloud auth application-default login
 ## 3. dbt プロジェクトの設定
 
 ### プロジェクトの初期化
-新しい dbt プロジェクトを作成します（すでに作成済みの場合はこのステップをスキップしてください）。
+新しい dbt プロジェクトを作成します。
 
 ```bash
 dbt init your_project_name
 ```
 
-対話形式のプロンプトでは、以下の設定を推奨します：
-- **Database (adapter)**: `bigquery`
-- **Authentication method**: `oauth`
-- **Project ID**: `<your-gcp-project-id>` (自身のプロジェクト ID を入力)
-- **Dataset**: `dbt_dev` (開発用データセット名)
-- **Threads**: `4`
-- **Desired location**: `asia-northeast1` (または `US`)
+対話形式のプロンプトでは、以下の通りに入力・選択してください：
+1. **Which database would you like to use?**: `1` (bigquery)
+2. **Desired authentication method**: `1` (oauth)
+3. **Project ID**: `あなたのプロジェクトID` (※注意参照)
+4. **Dataset**: `dbt_dev`
+5. **Threads**: `4`
+6. **Job execution timeout seconds**: `300`
+7. **Desired location**: `1` (US) または `asia-northeast1`
 
-### 接続確認
-プロジェクトディレクトリに移動し、接続を確認します。
+> [!IMPORTANT]
+> **Project ID についての注意**
+> GCP コンソールに表示される「プロジェクト名（例: my project）」ではなく、**「プロジェクト ID（例: sharp-crossbar-123456）」**を入力してください。プロジェクト ID は GCP コンソールのダッシュボードや、`gcloud projects list` コマンドで確認できます。
 
-```bash
-cd your_project_name
-dbt debug
+### 接続のトラブルシューティング
+
+#### 'NoneType' object has no attribute 'close' エラー
+`dbt debug` でこのエラーが出る場合、OAuth 認証の接続設定が不足している可能性があります。以下の手順で `profiles.yml` を直接修正するのが最も安全です。
+
+1. dbt の設定ファイルを開きます：
+   `nano ~/.dbt/profiles.yml`
+2. 対象のプロファイルの `outputs -> dev` セクションに `compute_region: US` (または使用しているリージョン) を追記し、`project` ID が正しいか確認します。
+
+```yaml
+your_project_name:
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      project: your-project-id  # プロジェクト名ではなくID
+      dataset: dbt_dev
+      location: US
+      priority: interactive
+      threads: 4
+      compute_region: US  # ← 接続エラーが出る場合に追記
 ```
 
 ## 4. データの準備 (Seeds)
 
-dbt の `seed` 機能を使用して、`data/` ディレクトリ配下にある CSV ファイルを BigQuery のテーブルとしてロードします。
+dbt の `seed` 機能を使用して、CSV ファイルを BigQuery のテーブルとしてロードします。
 
 ```bash
+# seeds ディレクトリに移動
+cd your_project_name/seeds
+
+# サンプルデータの取得 (jaffle_shop)
+curl -O https://raw.githubusercontent.com/dbt-labs/jaffle_shop/main/seeds/raw_customers.csv
+curl -O https://raw.githubusercontent.com/dbt-labs/jaffle_shop/main/seeds/raw_orders.csv
+curl -O https://raw.githubusercontent.com/dbt-labs/jaffle_shop/main/seeds/raw_payments.csv
+
+# プロジェクトルートに戻ってロード実行
+cd ..
 dbt seed
 ```
 
-## 5. モデルの作成と実行 (Run)
+## 5. モデリングフロー
 
-SQL を使用してデータモデルを構築します。
+dbt のベストプラクティスに基づいたレイヤー構造でモデルを構築します。
 
-- **Staging層**: 元データのクレンジングと型変換を行います。
-- **Marts層**: ビジネスロジックを適用し、分析用のテーブルを作成します。
+### ステップ 1: Sources の定義
+`models/staging/src_jaffle_shop.yml` を作成し、元データを定義します。
+
+### ステップ 2: Staging モデル (クレンジング)
+`models/staging/stg_customers.sql` を作成し、型変換やリネームを行います。
+- 参照方法: `{{ source('jaffle_shop', 'raw_customers') }}`
+
+### ステップ 3: Marts モデル (ビジネスロジック)
+`models/marts/dim_customers.sql` を作成し、Staging モデルを組み合わせて分析用テーブルを作成します。
+- 参照方法: `{{ ref('stg_customers') }}`
 
 ```bash
-# stagingモデルのみを実行する場合
-dbt run --select staging
-
-# 全てのモデルを実行する場合
+# モデルの実行
 dbt run
 ```
 
 ## 6. テストとドキュメント
 
-### データ品質テスト
-一意性や非空などの制約をチェックします。
+### データ品質の検証
+`schema.yml` にテストを記述し、データの整合性をチェックします。
 
 ```bash
+# テストの実行
 dbt test
+
+# 特定のモデルのみテストする場合
+dbt test --select stg_customers
 ```
 
-### ドキュメントの生成
-リネージ図を含むドキュメントを生成し、ローカルサーバーで確認できます。
+### ドキュメントとリネージ図
+SQL から自動生成されるドキュメントと、モデル間の依存関係図（リネージ）を確認します。
 
 ```bash
 dbt docs generate
 dbt docs serve
 ```
 
-## 7. プロジェクト構成のベストプラクティス
+## 7. 開発のベストプラクティス (Tips)
 
-本プロジェクトは以下の構造に従うことを推奨しています：
-- `models/staging/`: ソースデータ 1 対 1 のクレンジング層。
-- `models/marts/`: ビジネスドメインごとに整理された分析層。
-- `tests/`: 汎用テスト以外のカスタムデータテスト。
-- `macros/`: 再利用可能な SQL ロジック。
+- **Source -> Staging -> Marts**: 直接ソースを参照せず、必ず Staging 層を経由させることで、ソースの変更に強い構成になります。
+- **DRY (Don't Repeat Yourself)**: 共通のロジックはマクロ (`macros/`) に抽出しましょう。
+- **テストの習慣化**: `unique` と `not_null` は主要なカラムに必ず設定することを推奨します。
 
 ## ライセンス
 

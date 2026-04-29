@@ -1,0 +1,9 @@
+version: 2
+sources:
+  - name: jaffle_shop
+    description: A clone of a Postgres application database.
+    database: "{{ target.project }}"
+    schema: dbt_dev
+    tables:
+      - name: raw_customers
+      - name: raw_orders

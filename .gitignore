@@ -12,6 +12,10 @@ dbt_packages/
 dbt_modules/
 logs/
 *.log
+**/target/
+**/dbt_packages/
+**/dbt_modules/
+**/logs/
 
 # IDE
 .vscode/
@@ -22,3 +26,14 @@ logs/
 *.json
 .env
 profiles.yml
+
+# SQLite or DuckDB
+*.db
+*.db-journal
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Python
+.python-version
+pip-debug-log.mask
