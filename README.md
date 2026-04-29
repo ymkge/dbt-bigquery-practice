@@ -1,110 +1,113 @@
-# dbt + BigQuery 実践ハンズオンガイド
+# dbt-BigQuery Hands-on Tutorial
 
-このガイドでは、BigQueryをデータウェアハウスとして使用し、dbt (data build tool) の標準的な開発フローを体験します。
+このリポジトリは、Google Cloud BigQuery をデータウェアハウスとして使用し、dbt (data build tool) の標準的な開発フローを学習するためのハンズオンガイドです。
+
+## 概要
+
+dbt を使用して、BigQuery 上でデータの変換（ELT）を行う際の手順をステップバイステップで解説します。本チュートリアルでは、dbt 公式のサンプルプロジェクトである `jaffle_shop` のデータ構造を参考に、BigQuery への接続からモデル作成、テスト、ドキュメント生成までを体験します。
 
 ## 0. 前提条件
-- Google Cloud プロジェクト (`aplab project`) が作成されていること
-- Google Cloud CLI (`gcloud`) がインストールされていること
-- Python 3.9以上がインストールされていること
 
----
+- **Google Cloud プロジェクト**: 管理者権限（または BigQuery 管理者権限）を持つプロジェクトが必要です。
+- **Google Cloud CLI (`gcloud`)**: ローカルマシンにインストールされ、認証が済んでいること。
+- **Python**: 3.9 以上のバージョンがインストールされていること。
 
 ## 1. 環境構築
 
-まずは仮想環境を作成し、`dbt-bigquery` をインストールします。
+依存関係を分離するために仮想環境を作成し、必要なライブラリをインストールします。
 
 ```bash
 # 仮想環境の作成と有効化
 python3 -m venv venv
 source venv/bin/activate
 
-# dbt-bigqueryのインストール
-pip install dbt-bigquery
+# 依存ライブラリのインストール
+pip install -r requirements.txt
 ```
 
-## 2. GCP認証 (ADCの設定)
+## 2. Google Cloud 認証
 
-ローカル環境からBigQueryを操作するために、アプリケーション・デフォルト認証 (ADC) を設定します。
+ローカル環境の dbt が BigQuery に安全にアクセスできるように、アプリケーション・デフォルト認証 (ADC) を設定します。
 
 ```bash
 gcloud auth application-default login
 ```
-※ブラウザが立ち上がるので、`aplab project` へのアクセス権限を持つアカウントでログインしてください。
 
----
+※ 実行後、ブラウザが開きログインを求められます。使用する Google Cloud プロジェクトにアクセス権のあるアカウントを選択してください。
 
-## 3. dbtプロジェクトの初期化
+## 3. dbt プロジェクトの設定
 
-`jaffle_shop_bq` という名前でプロジェクトを初期化します。
+### プロジェクトの初期化
+新しい dbt プロジェクトを作成します（すでに作成済みの場合はこのステップをスキップしてください）。
 
 ```bash
-dbt init jaffle_shop_bq
+dbt init your_project_name
 ```
-- **Adapterの選択**: `bigquery` を選択
-- **Authentication method**: `oauth` を選択
-- **Project ID**: `aplab project` を入力
-- **Dataset**: `dbt_dev` (または任意のデータセット名) を入力
-- **Threads**: `4` (デフォルト)
-- **Job execution timeout seconds**: `300` (デフォルト)
-- **Desired location**: `asia-northeast1` (東京) または `US`
 
-初期化後、プロジェクトディレクトリに移動します。
+対話形式のプロンプトでは、以下の設定を推奨します：
+- **Database (adapter)**: `bigquery`
+- **Authentication method**: `oauth`
+- **Project ID**: `<your-gcp-project-id>` (自身のプロジェクト ID を入力)
+- **Dataset**: `dbt_dev` (開発用データセット名)
+- **Threads**: `4`
+- **Desired location**: `asia-northeast1` (または `US`)
+
+### 接続確認
+プロジェクトディレクトリに移動し、接続を確認します。
+
 ```bash
-cd jaffle_shop_bq
+cd your_project_name
+dbt debug
 ```
-
----
 
 ## 4. データの準備 (Seeds)
 
-dbtの `seeds` 機能を使って、サンプルCSVデータをBigQueryにロードします。
-
-1. `jaffle_shop` のサンプルデータをダウンロード（または作成）して `data/` フォルダに配置します。
-2. 以下のコマンドを実行します。
+dbt の `seed` 機能を使用して、`data/` ディレクトリ配下にある CSV ファイルを BigQuery のテーブルとしてロードします。
 
 ```bash
 dbt seed
 ```
-これで BigQuery 上に `raw_customers`, `raw_orders`, `raw_payments` などのテーブルが作成されます。
 
----
+## 5. モデルの作成と実行 (Run)
 
-## 5. モデリング (Run)
+SQL を使用してデータモデルを構築します。
 
-### Staging層の作成
-元データを整理するビューを作成します。`models/staging/` ディレクトリを作成し、SQLファイルを配置して実行します。
+- **Staging層**: 元データのクレンジングと型変換を行います。
+- **Marts層**: ビジネスロジックを適用し、分析用のテーブルを作成します。
 
 ```bash
+# stagingモデルのみを実行する場合
 dbt run --select staging
-```
 
-### Marts層の作成
-ビジネスロジックを適用した最終的なテーブルを作成します。
-
-```bash
+# 全てのモデルを実行する場合
 dbt run
 ```
 
----
-
 ## 6. テストとドキュメント
 
-### テストの実行
-データ品質（一意性、非空など）をチェックします。
+### データ品質テスト
+一意性や非空などの制約をチェックします。
 
 ```bash
 dbt test
 ```
 
-### ドキュメントの生成と表示
-リネージ図を含むドキュメントを生成し、ローカルサーバーで確認します。
+### ドキュメントの生成
+リネージ図を含むドキュメントを生成し、ローカルサーバーで確認できます。
 
 ```bash
 dbt docs generate
 dbt docs serve
 ```
 
----
+## 7. プロジェクト構成のベストプラクティス
 
-## 7. クリーンアップ
-学習が終わったら、BigQuery上のデータセットを削除してコストを抑えましょう。
+本プロジェクトは以下の構造に従うことを推奨しています：
+- `models/staging/`: ソースデータ 1 対 1 のクレンジング層。
+- `models/marts/`: ビジネスドメインごとに整理された分析層。
+- `tests/`: 汎用テスト以外のカスタムデータテスト。
+- `macros/`: 再利用可能な SQL ロジック。
+
+## ライセンス
+
+このプロジェクトは [MIT License](LICENSE) の下で公開されています。
