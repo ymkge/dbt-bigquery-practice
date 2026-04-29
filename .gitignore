@@ -1,0 +1,24 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# dbt
+target/
+dbt_packages/
+dbt_modules/
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Credentials
+*.json
+.env
+profiles.yml
