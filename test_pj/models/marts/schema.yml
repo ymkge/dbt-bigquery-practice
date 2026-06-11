@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: dim_customers
+    description: "顧客ごとの属性と集計された注文情報を含むディメンションテーブル"
+    columns:
+      - name: customer_id
+        description: "顧客のユニークID"
+        data_tests:
+          - unique
+          - not_null
+      - name: number_of_orders
+        description: "顧客が行った注文の総数"
+      - name: total_lifetime_value
+        description: "顧客のこれまでの累計購入金額（USD）"
